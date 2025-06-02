@@ -47,13 +47,18 @@ interface Documento {
   numeroFactura?: string
   numerofactura?: string
   nombreFarmacia?: string
+  totalFactura?: string
   productos?: {
     descripcion: string
     cantidad: number
-    precio_unitario: number
+    precio_unitario?: number
+    precio_bruto?: string
+    precio_neto?: string
+    precio_subtotal?: string
     codigo_de_articulo?: string
     importe?: string
   }[]
+  promedio_confianza_textract?: number
 }
 
 // Tipo para la respuesta de la API
@@ -102,6 +107,9 @@ export default function TransaccionesPage() {
   const [authChecked, setAuthChecked] = useState(false)
   const [initialLoadDone, setInitialLoadDone] = useState(false)
 
+  // Agregar un nuevo estado para el loader inicial
+  const [initialLoading, setInitialLoading] = useState(true)
+
   // Estados para el manejo de subida de archivos
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -128,6 +136,9 @@ export default function TransaccionesPage() {
   const [importeFilter, setImporteFilter] = useState("")
   const [destinatarioFilter, setDestinatarioFilter] = useState("")
 
+  // Agregar un nuevo estado para el loader de subida
+  const [uploadLoading, setUploadLoading] = useState(false)
+
   // Función para convertir un objeto DynamoDB a un objeto JavaScript plano
   const convertirDynamoDBItem = (item: DynamoDBItem): Documento => {
     const resultado: any = {}
@@ -147,7 +158,14 @@ export default function TransaccionesPage() {
           if (producto.M) {
             return {
               descripcion: producto.M.descripcion?.S || "",
-              precio_unitario: producto.M.precio_unitario?.N || producto.M.precio_unitario?.S || "0",
+              precio_unitario: producto.M.precio_unitario?.N
+                ? Number(producto.M.precio_unitario.N)
+                : producto.M.precio_unitario?.S
+                  ? Number(producto.M.precio_unitario.S)
+                  : undefined,
+              precio_bruto: producto.M.precio_bruto?.N || producto.M.precio_bruto?.S || "",
+              precio_neto: producto.M.precio_neto?.N || producto.M.precio_neto?.S || "",
+              precio_subtotal: producto.M.precio_subtotal?.N || producto.M.precio_subtotal?.S || "",
               cantidad: Number(producto.M.cantidad?.N || "0"),
               codigo_de_articulo: producto.M.codigo_de_articulo?.S || "",
               importe: producto.M.importe?.S || "0",
@@ -155,6 +173,8 @@ export default function TransaccionesPage() {
           }
           return producto
         })
+      } else if (value.N !== undefined && key === "promedio_confianza_textract") {
+        resultado[key] = Number.parseFloat(value.N)
       }
       // Añadir más tipos si es necesario
     }
@@ -319,6 +339,8 @@ export default function TransaccionesPage() {
         if (mostrarCarga) {
           setLoading(false)
         }
+        // Siempre desactivar el loader inicial después de la primera carga
+        setInitialLoading(false)
       }
     },
     [aplicarFiltros, enviadoPorFilter],
@@ -410,6 +432,8 @@ export default function TransaccionesPage() {
         if (mostrarCarga) {
           setLoading(false)
         }
+        // Siempre desactivar el loader inicial después de la primera carga
+        setInitialLoading(false)
       }
     },
     [aplicarFiltros, enviadoPorFilter],
@@ -861,7 +885,7 @@ export default function TransaccionesPage() {
     const file = e.target.files[0]
 
     try {
-      setLoading(true)
+      setUploadLoading(true)
       setError(null)
 
       // Obtener URL prefirmada
@@ -878,7 +902,7 @@ export default function TransaccionesPage() {
         await notifyFileUploaded(file.name, presignedData.ulid)
         console.log("Notificación completada")
 
-        // Recargar datos
+        // Recargar datos después de procesar
         recargarDatos()
       }
 
@@ -890,7 +914,7 @@ export default function TransaccionesPage() {
       console.error("Error en el proceso de subida:", err)
       setError(err instanceof Error ? err.message : "Error desconocido al subir el archivo")
     } finally {
-      setLoading(false)
+      setUploadLoading(false)
     }
   }
 
@@ -1028,13 +1052,13 @@ export default function TransaccionesPage() {
     return titles[field] || field
   }
 
-  // Si aún no se ha verificado la autenticación, mostrar un indicador de carga
-  if (!authChecked || !token) {
+  // Si aún no se ha verificado la autenticación o está cargando inicialmente, mostrar un indicador de carga
+  if (!authChecked || !token || initialLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
-          <p>Verificando autenticación...</p>
+          <p>{!authChecked || !token ? "Verificando autenticación..." : "Cargando facturas..."}</p>
         </div>
       </div>
     )
@@ -1060,14 +1084,23 @@ export default function TransaccionesPage() {
               </div>
             </div>
             <div className="w-full md:w-auto md:flex-shrink-0 flex gap-1 md:ml-auto mt-1 md:mt-4">
-   
               <Button
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 h-7 text-xs"
                 onClick={() => fileInputRef.current?.click()}
+                disabled={uploadLoading}
               >
-                <Upload className="mr-1 h-3 w-3" />
-                <span className="text-xs">Subir</span>
+                {uploadLoading ? (
+                  <>
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                    <span className="text-xs">Procesando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-1 h-3 w-3" />
+                    <span className="text-xs">Subir</span>
+                  </>
+                )}
               </Button>
               <input
                 ref={fileInputRef}
@@ -1097,6 +1130,9 @@ export default function TransaccionesPage() {
                   </th>
                   <th className="border border-blue-700 px-2 py-1.5 text-left text-xs font-medium">NOMBRE FARMACIA</th>
                   <th className="border border-blue-700 px-2 py-1.5 text-left text-xs font-medium">PRODUCTOS</th>
+                  <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-medium">
+                    NIVEL DE CONFIANZA
+                  </th>
                   <th className="border border-blue-700 px-2 py-1.5 text-center text-xs font-medium">ACCIONES</th>
                 </tr>
               </thead>
@@ -1170,16 +1206,53 @@ export default function TransaccionesPage() {
                                 <div className="font-medium text-blue-800">{producto.codigo_de_articulo}</div>
                                 <div className="text-gray-600 mt-1">
                                   <span>Cant: {producto.cantidad}</span>
-                                  <span className="mx-2">•</span>
-                                  <span>Precio: ${producto.precio_unitario}</span>
+                                  {producto.precio_unitario ? (
+                                    // Si tiene precio unitario, solo mostrar precio unitario
+                                    <>
+                                      <span className="mx-2">•</span>
+                                      <span>Precio Unit: ${producto.precio_unitario}</span>
+                                    </>
+                                  ) : (
+                                    // Si no tiene precio unitario, mostrar bruto, neto y subtotal
+                                    <>
+                                      {producto.precio_bruto && (
+                                        <>
+                                          <span className="mx-2">•</span>
+                                          <span>Bruto: ${producto.precio_bruto}</span>
+                                        </>
+                                      )}
+                                      {producto.precio_neto && (
+                                        <>
+                                          <span className="mx-2">•</span>
+                                          <span>Neto: ${producto.precio_neto}</span>
+                                        </>
+                                      )}
+                                      {producto.precio_subtotal && (
+                                        <>
+                                          <span className="mx-2">•</span>
+                                          <span>Subtotal: ${producto.precio_subtotal}</span>
+                                        </>
+                                      )}
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             ))}
+                            {documento.totalFactura && (
+                              <div className="text-xs font-bold text-green-700 border-t border-gray-300 pt-1 mt-2">
+                                Total Factura: ${documento.totalFactura}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <span className="text-gray-500">Sin productos</span>
                         )}
                       </div>
+                    </td>
+
+                    {/* GRADO DE CONFIANZA cell */}
+                    <td className="border border-gray-300 px-2 py-1.5 text-xs text-center">
+                      {documento.promedio_confianza_textract ? `${documento.promedio_confianza_textract}%` : "N/A"}
                     </td>
 
                     {/* ACCIONES cell */}

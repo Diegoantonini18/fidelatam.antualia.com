@@ -7,15 +7,14 @@ import { ThemeProvider } from "@/components/theme-provider"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Fidelatam – Sistema de IA desarrollado por Antualia",
+  title: "Finansutt – Sistema de IA desarrollado por Antualia",
   description:
-    "Desarrollado por Antualia.",
+    "Finansutt es un sistema de inteligencia artificial para la gestión financiera, desarrollado por Antualia.",
   icons: {
-    icon: "https://sutton-facturas.s3.us-east-1.amazonaws.com/Fidelatam.ico",
-    shortcut: "https://sutton-facturas.s3.us-east-1.amazonaws.com/Fidelatam.ico",
-    apple: "https://sutton-facturas.s3.us-east-1.amazonaws.com/Fidelatam.ico",
+    icon: "https://sutton-facturas.s3.us-east-1.amazonaws.com/finansutt.ico",
+    shortcut: "https://sutton-facturas.s3.us-east-1.amazonaws.com/finansutt.ico",
+    apple: "https://sutton-facturas.s3.us-east-1.amazonaws.com/finansutt.ico",
   },
-    generator: 'v0.dev'
 }
 
 export default function RootLayout({
